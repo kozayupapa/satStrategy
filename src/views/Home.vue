@@ -14,12 +14,13 @@
       </svg>
     </div>
     <MapComponent
-    :accessToken="accessToken"
-    :orbitData="satOrbitData"
-    :aoiCoord="aoiCoordinate"
+    :access-token="accessToken"
+    :orbit-data="satOrbitData"
+    :aoi-coord="aoiCoordinate"
   />
   </div>
 </template>
+
 
 <script lang="ts">
 import { defineComponent, onMounted, ref } from "vue";

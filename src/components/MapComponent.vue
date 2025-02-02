@@ -4,13 +4,13 @@
     <!-- map が初期化されてから子コンポーネントを描画 -->
     <SatelliteComponent
       v-if="map"
-      :map="map"
-      :orbitData="orbitData"
+      :map="map as mapboxgl.Map"
+      :orbit-data="orbitData"
     />
     <AOIComponent
       v-if="map"
-      :map="map"
-      :aoiCoord="aoiCoord"
+      :map="map as mapboxgl.Map"
+      :aoi-coord="aoiCoord"
     />
     <div class="controls">
       <button @click="toggle3D">
@@ -21,7 +21,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, onBeforeUnmount, ref } from 'vue';
+import { defineComponent, ref, onMounted, onBeforeUnmount } from 'vue';
 import mapboxgl from 'mapbox-gl';
 import SatelliteComponent from './SatelliteComponent.vue';
 import AOIComponent from './AOIComponent.vue';
@@ -51,14 +51,14 @@ export default defineComponent({
 
     onMounted(() => {
       mapboxgl.accessToken = props.accessToken;
-
+      // 型キャストを利用して、Mapbox GL の型エラーを抑制
       map.value = new mapboxgl.Map({
         container: 'map',
         style: 'mapbox://styles/mapbox/satellite-v9',
         center: [0, 0],
         zoom: 2,
         projection: is3D.value ? 'globe' : 'mercator',
-      });
+      }) as mapboxgl.Map;
 
       map.value.on('style.load', () => {
         map.value?.setFog({}); // 3Dモード時の大気表現など

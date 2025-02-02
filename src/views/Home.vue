@@ -13,17 +13,17 @@
         />
       </svg>
     </div>
-    <MapComponent   
-     v-if="orbitData"
-      :access-token="accessToken"
-      :orbit-data="orbitData"
+    <MapComponent
+    :accessToken="accessToken"
+    :orbitData="satOrbitData"
+    :aoiCoord="aoiCoordinate"
   />
   </div>
 </template>
 
 <script lang="ts">
 import { defineComponent, onMounted, ref } from "vue";
-import MapComponent from "@/components/Map.vue";
+import MapComponent from "@/components/MapComponent.vue";
 
 export default defineComponent({
   name: "HomePage",
@@ -32,6 +32,18 @@ export default defineComponent({
   },
   setup() {
     const accessToken = ref('MAPBOX_TOKEN_REMOVED');
+    const satOrbitData = ref([
+      { lng: 0, lat: 0 },
+      { lng: 10, lat: 5 },
+      { lng: 20, lat: 10 },
+      { lng: 40, lat: 20 },
+      { lng: 100, lat: 20 },
+      { lng: 140, lat: 40 },
+      // …軌道データを追加…
+    ]);
+    // AOI の座標（例）
+    const aoiCoordinate = ref({ lat: 15, lng: 15 });
+
     const orbitData = ref()
     onMounted(async () => {
       const response = await fetch("../src/assets/orbit_data.json");
@@ -45,6 +57,7 @@ export default defineComponent({
     return {
       accessToken,
       orbitData,
+      satOrbitData, aoiCoordinate 
     }
   }
 });

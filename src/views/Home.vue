@@ -13,18 +13,39 @@
         />
       </svg>
     </div>
-    <HelloWorld />
+    <MapComponent   
+     v-if="orbitData"
+      :access-token="accessToken"
+      :orbit-data="orbitData"
+  />
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent } from "vue";
-import HelloWorld from "@/components/HelloWorld.vue";
+import { defineComponent, onMounted, ref } from "vue";
+import MapComponent from "@/components/Map.vue";
 
 export default defineComponent({
   name: "HomePage",
   components: {
-    HelloWorld,
+    MapComponent,
   },
+  setup() {
+    const accessToken = ref('MAPBOX_TOKEN_REMOVED');
+    const orbitData = ref()
+    onMounted(async () => {
+      const response = await fetch("../src/assets/orbit_data.json");
+      if (!response.ok) throw new Error("Failed to fetch orbit data");
+      const data = JSON.parse(await response.text());
+      console.log(data);
+      orbitData.value = data;
+      console.log('loaded',data);
+    });
+ 
+    return {
+      accessToken,
+      orbitData,
+    }
+  }
 });
 </script>

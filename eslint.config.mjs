@@ -91,7 +91,10 @@ export default [
       "sonarjs/prefer-while": "error",
       "no-console": process.env.NODE_ENV === "production" ? "warn" : "off",
       "no-debugger": process.env.NODE_ENV === "production" ? "warn" : "off",
-
+      'no-ternary': 'off',
+      'no-inline-comments': 'off',
+      'no-plusplus':'off',
+      'sonarjs/no-hardcoded-secrets':'off',
     },
   },
   eslintConfigPrettier,

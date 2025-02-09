@@ -13,53 +13,20 @@
         />
       </svg>
     </div>
-    <MapComponent
-    :access-token="accessToken"
-    :orbit-data="satOrbitData"
-    :aoi-coord="aoiCoordinate"
+    <SimulationComponent
   />
   </div>
 </template>
 
 
 <script lang="ts">
-import { defineComponent, onMounted, ref } from "vue";
-import MapComponent from "@/components/MapComponent.vue";
+import { defineComponent,  } from "vue";
+import SimulationComponent from "@/components/SimulationComponent.vue";
 
 export default defineComponent({
   name: "HomePage",
   components: {
-    MapComponent,
+    SimulationComponent,
   },
-  setup() {
-    const accessToken = ref('MAPBOX_TOKEN_REMOVED');
-    const satOrbitData = ref([
-      { lng: 0, lat: 0 },
-      { lng: 10, lat: 5 },
-      { lng: 20, lat: 10 },
-      { lng: 40, lat: 20 },
-      { lng: 100, lat: 20 },
-      { lng: 140, lat: 40 },
-      // …軌道データを追加…
-    ]);
-    // AOI の座標（例）
-    const aoiCoordinate = ref({ lat: 15, lng: 15 });
-
-    const orbitData = ref()
-    onMounted(async () => {
-      const response = await fetch("../src/assets/orbit_data.json");
-      if (!response.ok) throw new Error("Failed to fetch orbit data");
-      const data = JSON.parse(await response.text());
-      console.log(data);
-      orbitData.value = data;
-      console.log('loaded',data);
-    });
- 
-    return {
-      accessToken,
-      orbitData,
-      satOrbitData, aoiCoordinate 
-    }
-  }
 });
 </script>

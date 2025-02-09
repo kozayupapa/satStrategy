@@ -46,6 +46,9 @@ export default [
       quotes: ["error", "double"],
       semi: ["error", "always"],
 
+      camelcase: "off",
+      "prefer-exponentiation-operator": "off",
+      "arrow-body-style": "off",
       "capitalized-comments": "off",
       "no-unreachable": "error",
       "one-var": "off",
@@ -91,6 +94,7 @@ export default [
       "sonarjs/prefer-object-literal": "error",
       "sonarjs/prefer-single-boolean-return": "error",
       "sonarjs/prefer-while": "error",
+      "sonarjs/pseudo-random": "off",
       "no-console": process.env.NODE_ENV === "production" ? "warn" : "off",
       "no-debugger": process.env.NODE_ENV === "production" ? "warn" : "off",
       "no-ternary": "off",

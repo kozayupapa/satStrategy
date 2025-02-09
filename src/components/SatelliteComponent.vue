@@ -6,6 +6,7 @@
 <script lang="ts">
 import { defineComponent, onMounted, onBeforeUnmount, watch } from 'vue';
 import mapboxgl from 'mapbox-gl';
+import type { Feature, LineString } from 'geojson';
 
 export default defineComponent({
   name: 'SatelliteComponent',
@@ -14,9 +15,9 @@ export default defineComponent({
       type: Object as () => mapboxgl.Map,
       required: true,
     },
-    // 軌道データ。各要素は { lng: number, lat: number } の形式
+    // 軌道データ。各要素は { lat: number, lng: number } の形式
     orbitData: {
-      type: Array as () => Array<{ lng: number; lat: number }>,
+      type: Array as () => Array<{ lat: number; lng: number }>,
       required: true,
     },
   },
@@ -24,23 +25,21 @@ export default defineComponent({
     let satelliteMarker: mapboxgl.Marker | null = null;
     let animationFrame = 0;
     let animationIndex = 0;
-    const orbitSourceId = 'satOrbitSource';
-    const orbitLayerId = 'satOrbitLayer';
+    // 複数インスタンス同士が衝突しないようにランダムなソース／レイヤー ID を生成
+    const orbitSourceId = `satOrbitSource-${Math.random().toString(36).substring(2, 7)}`;
+    const orbitLayerId = `satOrbitLayer-${Math.random().toString(36).substring(2, 7)}`;
 
-    // 軌跡（ライン）の描画
     const createOrbitLine = () => {
       // GeoJSON Feature として properties を必ず設定
-      const geojson: GeoJSON.Feature<GeoJSON.LineString, {}> = {
-        type: 'Feature',
+      const geojson: Feature<LineString, Record<string, unknown>> = {
+        type: "Feature", // リテラル "Feature" を指定
         geometry: {
-          type: 'LineString',
-          coordinates: props.orbitData.map((point) => [point.lng, point.lat]),
+          type: "LineString", // リテラル "LineString" を指定
+          coordinates: props.orbitData.map(point => [point.lng, point.lat]),
         },
         properties: {},
       };
-
       if (props.map.getSource(orbitSourceId)) {
-        // すでに存在する場合はデータ更新
         (props.map.getSource(orbitSourceId) as mapboxgl.GeoJSONSource).setData(geojson);
       } else {
         props.map.addSource(orbitSourceId, {
@@ -57,44 +56,52 @@ export default defineComponent({
           },
           paint: {
             'line-color': '#FF0000',
-            'line-width': 3,
+            'line-width': 1,
           },
         });
       }
     };
 
-    // 衛星マーカーのアニメーション
     const startAnimation = () => {
       animationIndex = 0;
       const animate = () => {
         if (animationIndex < props.orbitData.length) {
           const { lng, lat } = props.orbitData[animationIndex];
           satelliteMarker?.setLngLat([lng, lat]);
-          // 必要に応じてパンさせる（コメントアウト解除可）
-          // props.map.panTo([lng, lat]);
           animationIndex++;
           animationFrame = requestAnimationFrame(animate);
         } else {
-          cancelAnimationFrame(animationFrame);
+          animationIndex=0;
+          animationFrame = requestAnimationFrame(animate);
         }
       };
       animationFrame = requestAnimationFrame(animate);
     };
 
-    onMounted(() => {
-      // カスタムHTML要素で大きく視認しやすい衛星マーカーを作成
+    const addMarker = () => {
       const el = document.createElement('div');
       el.className = 'satellite-marker';
+      el.style.width = '30px';
+      el.style.height = '30px';
+      el.style.backgroundColor = 'red';
+      el.style.border = '1px solid white';
+      el.style.borderRadius = '50%';
+      el.style.boxShadow = '0 0 5px rgba(0, 0, 0, 0.5)';
+
       satelliteMarker = new mapboxgl.Marker(el)
         .setLngLat([props.orbitData[0].lng, props.orbitData[0].lat])
         .addTo(props.map);
+    };
 
-      // map のスタイルが読み込まれていない場合、load イベントを待つ
+    onMounted(() => {
+
       if (props.map.isStyleLoaded()) {
+        addMarker();
         createOrbitLine();
         startAnimation();
       } else {
         props.map.once('load', () => {
+          addMarker();
           createOrbitLine();
           startAnimation();
         });
@@ -112,15 +119,11 @@ export default defineComponent({
       }
     });
 
-    // 軌道データが変更されたら軌跡とアニメーションを更新
-    watch(
-      () => props.orbitData,
-      () => {
-        createOrbitLine();
-        animationIndex = 0;
-        startAnimation();
-      }
-    );
+    watch(() => props.orbitData, () => {
+      createOrbitLine();
+      animationIndex = 0;
+      startAnimation();
+    });
 
     return {};
   },
@@ -133,6 +136,7 @@ export default defineComponent({
   height: 30px;
   background-color: red;
   border: 3px solid white;
+  z-index: 1000;
   border-radius: 50%;
   box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
 }

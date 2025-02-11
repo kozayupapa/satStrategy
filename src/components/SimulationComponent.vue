@@ -16,7 +16,7 @@
               <option value="inclined">Inclined</option>
             </select>
           </label>
-          <div v-if="sat.orbitType === 'inclined'">
+          <div v-if="sat.orbitType === 'sun-synchronous'">
             <label>
               Launch Inclination Angle (deg):
               <input 
@@ -88,7 +88,30 @@
         <button type="submit">Start Simulation</button>
       </div>
     </form>
-
+    <!-- 撮像待ち時間の結果表示 -->
+    <div v-if="imagingWaitResults.length > 0" class="results">
+      <h2>Imaging Wait Times</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Satellite Index</th>
+            <th>AOI Index</th>
+            <th>Average Wait Time (sec)</th>
+            <th>Maximum Wait Time (sec)</th>
+            <th>Imaging Times (sec)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="result in imagingWaitResults" :key="result.satelliteIndex + '-' + result.aoiIndex">
+            <td>{{ result.satelliteIndex }}</td>
+            <td>{{ result.aoiIndex }}</td>
+            <td>{{ result.avgWait !== null ? result.avgWait.toFixed(2) : 'N/A' }}</td>
+            <td>{{ result.maxWait !== null ? result.maxWait.toFixed(2) : 'N/A' }}</td>
+            <td>{{ result.imagingTimes.join(', ') }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
     <div v-if="simulationStarted" style="margin-top: 2rem;">
       <!-- マップコンポーネントへ、計算済みの各衛星軌道データと AOI 情報を渡す -->
       <MapComponent
@@ -158,7 +181,7 @@ export default defineComponent({
     const accessToken = ref('MAPBOX_TOKEN_REMOVED');
 
     // 初期状態として 1 つの衛星、1 つの AOI を用意
-    const satellites = ref<SatelliteInput[]>([
+    const satellitesRef = ref<SatelliteInput[]>([
       {
         orbitType: 'sun-synchronous',
         launchAngle: 97.8, // sun-synchronous では固定
@@ -168,6 +191,12 @@ export default defineComponent({
       },
     ]);
 
+    // ここで、satellitesRef をグローバルな reactive 変数として定義\
+    /*
+    const satellitesRef = ref<SatelliteInput[]>([
+      { orbitType: 'inclined', launchLat: 30, launchLon: 140, altitude: 500, launchAngle: 97.8 }
+    ]);*/
+
     const aois = ref<AOI[]>([
       { lat: 15, lon: 15 },
     ]);
@@ -175,7 +204,7 @@ export default defineComponent({
     const simulationStarted = ref(false);
 
     const addSatellite = () => {
-      satellites.value.push({
+      satellitesRef.value.push({
         orbitType: 'sun-synchronous',
         launchAngle: 97.8,
         launchLat: 0,
@@ -188,7 +217,45 @@ export default defineComponent({
       aois.value.push({ lat: 0, lon: 0 });
     };
 
-   
+    const toRadians = (deg: number): number => {
+      return deg * Math.PI / 180;
+    };
+
+    const toDegrees = (rad: number): number => {
+      return rad * 180 / Math.PI;
+    };
+    const haversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+      const R = 6371;
+      const dLat = toRadians(lat2 - lat1);
+      const dLon = toRadians(lon2 - lon1);
+      const a = Math.sin(dLat/2)**2 + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon/2)**2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    };
+    /**
+     * 2点 (lat1, lon1) から (lat2, lon2) までの方位角（真北から時計回り、度）を計算
+     */
+    const computeBearing = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+      const φ1 = toRadians(lat1);
+      const φ2 = toRadians(lat2);
+      const Δλ = toRadians(lon2 - lon1);
+      const y = Math.sin(Δλ) * Math.cos(φ2);
+      const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+      let θ = Math.atan2(y, x);
+      // 角度に変換し、0～360度の範囲に正規化
+      θ = (toDegrees(θ) + 360) % 360;
+      return θ;
+    };
+
+    /**
+     * 2つの角度の差を [0, 180] の範囲で返す
+     */
+    const angleDifference = (a: number, b: number): number => {
+      let diff = Math.abs(a - b) % 360;
+      if (diff > 180) diff = 360 - diff;
+      return diff;
+    };
+
     /**
      * ユーザー入力からダミーTLEを生成する関数
      * @param sat ユーザーが入力した衛星パラメータ
@@ -257,7 +324,7 @@ export default defineComponent({
       //   { orbitType: 'sun-synchronous', launchLat: 0, launchLon: 0, altitude: 600, launchAngle: 5 },
       // ]);
       
-      return satellites.value.map((satInput) => {
+      return satellitesRef.value.map((satInput) => {
         // ダミーTLEを生成
         const { line1, line2 } = generateDummyTLE(satInput);
         // TLE から satrec を作成（SGP4 propagator を内部的に使用）
@@ -275,7 +342,7 @@ export default defineComponent({
 
           // propagate() を用いて ECI 座標（位置、速度）を計算
           const posVel = satellite.propagate(satrec, currentTime);
-          if (posVel.position) {
+          if (posVel.position && typeof posVel.position !== 'boolean') {
             // ECI 座標から GMST (Greenwich Mean Sidereal Time) を計算
             const gmst = satellite.gstime(currentTime);
             // ECI 座標を地球固定座標（ジオデティック：緯度、経度、高度）に変換
@@ -290,35 +357,116 @@ export default defineComponent({
       });
     });
 
+    // imagingWaitResults: 各衛星軌道と各 AOI の組み合わせで、撮像条件を満たすタイミングを抽出し、
+    // 撮像間隔から平均待ち時間と最大待ち時間を計算する
+    const imagingWaitResults = computed(() => {
+      const results: Array<{
+        satelliteIndex: number;
+        aoiIndex: number;
+        avgWait: number | null;
+        maxWait: number | null;
+        imagingTimes: number[];
+      }> = [];
+      const lateralTolerance = 5; // 真横条件の許容誤差（度）
+      const offNadirMin = 20;     // Off-Nadir 角の下限 (度)
+      const offNadirMax = 45;     // Off-Nadir 角の上限 (度)
+      const TIME_SCALE_LOCAL = TIME_SCALE;
+      
+      computedSatellites.value.forEach((satOrbit, satIndex) => {
+        const {orbitData} = satOrbit;
+        aois.value.forEach((aoi, aoiIndex) => {
+          const imagingTimes: number[] = [];
+          for (let i = 0; i < orbitData.length - 1; i++) {
+            const currentPos = orbitData[i];
+            const nextPos = orbitData[i + 1];
+            const heading = computeBearing(currentPos.lat, currentPos.lng, nextPos.lat, nextPos.lng);
+            const lateral1 = (heading + 90) % 360;
+            const lateral2 = (heading + 270) % 360;
+            const bearingToAOI = computeBearing(currentPos.lat, currentPos.lng, aoi.lat, aoi.lon);
+            const diff1 = angleDifference(bearingToAOI, lateral1);
+            const diff2 = angleDifference(bearingToAOI, lateral2);
+            if (diff1 <= lateralTolerance || diff2 <= lateralTolerance) {
+              // Off-Nadir 角の計算
+              const distance = haversineDistance(currentPos.lat, currentPos.lng, aoi.lat, aoi.lon);
+              // offNadir = arctan(distance / altitude) (sat.altitude in km)
+              const offNadirDeg = toDegrees(Math.atan(distance / satellitesRef.value?.[satIndex].altitude));
+              if (offNadirDeg >= offNadirMin && offNadirDeg <= offNadirMax) {
+                imagingTimes.push(i * TIME_SCALE_LOCAL);
+              }
+            }
+          }
+          if (imagingTimes.length >= 2) {
+            const intervals: number[] = [];
+            for (let j = 0; j < imagingTimes.length - 1; j++) {
+              intervals.push(imagingTimes[j + 1] - imagingTimes[j]);
+            }
+            const avgInterval = intervals.reduce((sum, dt) => sum + dt, 0) / intervals.length;
+            const avgWait = avgInterval / 2;
+            const maxWait = Math.max(...intervals);
+            results.push({
+              satelliteIndex: satIndex,
+              aoiIndex: aoiIndex,
+              avgWait,
+              maxWait,
+              imagingTimes,
+            });
+          } else {
+            results.push({
+              satelliteIndex: satIndex,
+              aoiIndex: aoiIndex,
+              avgWait: null,
+              maxWait: null,
+              imagingTimes,
+            });
+          }
+        });
+      });
+      return results;
+    });
     const startSimulation = () => {
       simulationStarted.value = true;
     };
 
     return {
       accessToken,
-      satellites,
-      aois,
       addSatellite,
       addAOI,
-      startSimulation,
+      satellites: satellitesRef,
+      aois,
       simulationStarted,
+      startSimulation,
       computedSatellites,
+      imagingWaitResults,      
     };
   },
 });
 </script>
 
 <style scoped>
-form {
-  max-width: 600px;
+.simulator {
+  max-width: 800px;
   margin: 0 auto;
+  padding: 1rem;
 }
-label {
-  display: block;
-  margin: 0.5rem 0;
+form {
+  border: 1px solid #ccc;
+  padding: 1rem;
+  margin-bottom: 1rem;
 }
-input,
-select {
-  margin-left: 0.5rem;
+.satellite-input, .aoi-input {
+  margin-bottom: 1rem;
+}
+.results table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.results th,
+.results td {
+  border: 1px solid #ccc;
+  padding: 0.5rem;
+  text-align: center;
+}
+.map-wrapper {
+  margin-top: 1rem;
 }
 </style>

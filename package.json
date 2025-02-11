@@ -15,6 +15,7 @@
     "firebase": "^11.2.0",
     "mapbox-gl": "^3.9.3",
     "pinia": "^2.3.1",
+    "satellite.js": "^5.0.0",
     "suncalc": "^1.9.0",
     "vue": "^3.5.13",
     "vue-i18n": "^11.0.1",

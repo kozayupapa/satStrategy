@@ -64,17 +64,24 @@ export default defineComponent({
 
     const startAnimation = () => {
       animationIndex = 0;
-      const animate = () => {
-        if (animationIndex < props.orbitData.length) {
-          const { lng, lat } = props.orbitData[animationIndex];
-          satelliteMarker?.setLngLat([lng, lat]);
-          animationIndex++;
-          animationFrame = requestAnimationFrame(animate);
-        } else {
-          animationIndex=0;
-          animationFrame = requestAnimationFrame(animate);
+      let lastUpdateTime = performance.now();
+
+      const animate = (currentTime: number) => {
+        // 現在の時刻と前回更新時刻の差が500ミリ秒以上なら更新
+        if (currentTime - lastUpdateTime >= 300) {
+          lastUpdateTime = currentTime; // 更新時刻を記録
+
+          if (animationIndex < props.orbitData.length) {
+            const { lng, lat } = props.orbitData[animationIndex];
+            satelliteMarker?.setLngLat([lng, lat]);
+            animationIndex++;
+          } else {
+            animationIndex = 0;
+          }
         }
+        animationFrame = requestAnimationFrame(animate);
       };
+
       animationFrame = requestAnimationFrame(animate);
     };
 
@@ -87,6 +94,8 @@ export default defineComponent({
       el.style.border = '1px solid white';
       el.style.borderRadius = '50%';
       el.style.boxShadow = '0 0 5px rgba(0, 0, 0, 0.5)';
+
+      console.log(props.orbitData);
 
       satelliteMarker = new mapboxgl.Marker(el)
         .setLngLat([props.orbitData[0].lng, props.orbitData[0].lat])

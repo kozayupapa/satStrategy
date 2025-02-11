@@ -19,17 +19,40 @@
           <div v-if="sat.orbitType === 'inclined'">
             <label>
               Launch Inclination Angle (deg):
-              <input type="number" v-model.number="sat.launchAngle" />
+              <input 
+                type="number" 
+                step="any" 
+                :value="97.8" 
+                disabled
+              />
+            </label>
+          </div>
+          <div v-else>
+            <label>
+              Launch Inclination Angle (deg):
+              <input 
+                type="number" 
+                step="any" 
+                v-model.number="sat.launchAngle" 
+              />
             </label>
           </div>
           <div>
             <label>
               Launch Location Latitude:
-              <input type="number" v-model.number="sat.launchLat" />
+              <input 
+                type="number" 
+                step="any" 
+                v-model.number="sat.launchLat" 
+              />
             </label>
             <label>
               Launch Location Longitude:
-              <input type="number" v-model.number="sat.launchLon" />
+              <input 
+                type="number" 
+                step="any" 
+                v-model.number="sat.launchLon" 
+              />
             </label>
           </div>
           <div>
@@ -80,11 +103,12 @@
 <script lang="ts">
 import { defineComponent, ref, computed } from 'vue';
 import MapComponent from './MapComponent.vue';
+import * as satellite from 'satellite.js';
 
-const R_EARTH = 6371; // 地球半径 [km]
-const MU = 398600; // 地球の重力定数 [km^3/s^2]
-const TIME_SCALE = 1440; // 1 simulation second corresponds to 1440 real seconds (86400 sec/day ÷ 60 sec)
-const SIM_DURATION = 120; // シミュレーションの総秒数（＝1分間）
+const R_EARTH = 6371;      // 地球半径 [km]
+const MU = 398600;         // 地球の重力定数 [km^3/s^2]
+const SIM_DURATION = 720;   // シミュレーションの秒数（例：1分間で1日分をシミュレーション）
+const TIME_SCALE = 60*60*24/SIM_DURATION;   // シミュレーション時刻と実時間の比（86400秒÷60秒）
 
 // 各衛星の入力パラメータ
 interface SatelliteInput {
@@ -105,6 +129,27 @@ interface AOI {
 interface SatelliteOrbit {
   orbitData: Array<{ lat: number; lng: number }>;
 }
+
+
+/*
+const reflectLatLon = (lat: number, lon: number): { lat: number; lon: number } => {
+    // 北極を超える場合
+    let retLat=lat, retLon=lon;
+    if (lat > 90) {
+      retLat = 180 - lat;
+      retLon += 180;
+    }
+    
+    // 南極を超える場合
+    if (lat < -90) {
+      retLat = -180 - lat;
+      retLon += 180;
+    }
+    // 経度を -180～180 の範囲に正規化
+    retLon = ((retLon + 180) % 360) - 180;
+    return { lat:retLat, lon:retLon };
+};
+*/
 
 export default defineComponent({
   name: 'SimulationComponent',
@@ -143,30 +188,107 @@ export default defineComponent({
       aois.value.push({ lat: 0, lon: 0 });
     };
 
-   // シミュレーションの計算部分（例）
-  const computedSatellites = computed<SatelliteOrbit[]>(() => {
-    return satellites.value.map((sat) => {
-      // 円軌道と仮定して、軌道周期を計算（実時間）
-      const orbitalPeriod = 2 * Math.PI * Math.sqrt(Math.pow(R_EARTH + sat.altitude, 3) / MU);
-      const orbitData: Array<{ lat: number; lng: number }> = [];
+   
+    /**
+     * ユーザー入力からダミーTLEを生成する関数
+     * @param sat ユーザーが入力した衛星パラメータ
+     * @returns { line1: string, line2: string } ダミーTLEの2行
+     */
+    const generateDummyTLE = (sat: SatelliteInput): { line1: string; line2: string } => {
+      // 'inclined' の場合は打ち上げ傾斜角を 97.8 固定
+      const inclination = sat.orbitType === 'inclined' ? 97.8 : sat.launchAngle;
+      // RAAN を打ち上げ経度として簡易設定
+      const raan = sat.launchLon;
+      //const eccentricity = 0;       // 円軌道と仮定
+      const argPerigee = 0;         // 近地点引数：0
+      const meanAnomaly = 0;        // 平均近点角：0
 
-      // シミュレーションは SIM_DURATION 秒間（＝1分間）のアニメーション
-      for (let t_sim = 0; t_sim <= SIM_DURATION; t_sim++) {
-        const t_real = t_sim * TIME_SCALE; // 実時間 [s]
-        const theta = ((t_real % orbitalPeriod) / orbitalPeriod) * 2 * Math.PI; // 角度 [rad]
-        const latVariation =
-          sat.orbitType === 'inclined'
-            ? sat.launchAngle * Math.sin(theta)
-            : 10 * Math.sin(theta);
-        const lat = sat.launchLat + latVariation;
-        const lonRaw = sat.launchLon + (360 * (t_real / orbitalPeriod));
-        const lon = ((lonRaw + 180) % 360) - 180;
-        orbitData.push({ lat, lng: lon });
-      }
-      return { orbitData };
+      // 平均運動 (revs per day) の計算
+      const semiMajorAxis = R_EARTH + sat.altitude; // km
+      const n = Math.sqrt(MU / Math.pow(semiMajorAxis, 3)); // rad/s
+      const meanMotion = n * 86400 / (2 * Math.PI); // revs per day
+
+      // Epoch の生成（TLE epoch は YYDDD.DDDDDDDD 形式）
+      const now = new Date();
+      const year = now.getUTCFullYear() % 100; // 下2桁
+      const startOfYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+      const dayOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      const secondsOfDay = now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds() + now.getUTCMilliseconds()/1000;
+      const fraction = secondsOfDay / 86400;
+      // Epoch を "YYDDD.DDDDDDDD" 形式に整形（ここでは小数部は 8 桁固定）
+      const epoch = `${year.toString().padStart(2, '0')}${dayOfYear.toString().padStart(3, '0')}.${fraction.toFixed(8).slice(2)}`;
+
+      // ダミーの衛星番号（"00001" で固定）
+      const satNum = "00001";
+
+      // TLE Line 1（フォーマットの厳密なチェックディジット計算などは省略）
+      const line1 = `1 ${satNum}U 00000A   ${epoch}  .00000000  00000-0  00000-0 0  9991`;
+
+      // TLE Line 2 の各項目は所定の桁数で埋める必要があります。
+      // 以下は簡易フォーマット例です。
+      // - Inclination: 8桁（例：" 97.8000"）
+      // - RAAN: 8桁
+      // - Eccentricity: 7桁（小数点なし、0の場合は"0000000"）
+      // - Argument of Perigee: 8桁
+      // - Mean Anomaly: 8桁
+      // - Mean Motion: 11桁（小数点含む）
+      const inclStr = inclination.toFixed(4).padStart(8, ' ');
+      const raanStr = raan.toFixed(4).padStart(8, ' ');
+      const eccStr = "0000000"; // ecc = 0
+      const argPerigeeStr = argPerigee.toFixed(4).padStart(8, ' ');
+      const meanAnomalyStr = meanAnomaly.toFixed(4).padStart(8, ' ');
+      const meanMotionStr = meanMotion.toFixed(8).padStart(11, ' ');
+
+      const line2 = `2 ${satNum} ${inclStr} ${raanStr} ${eccStr} ${argPerigeeStr} ${meanAnomalyStr} ${meanMotionStr}`;
+      
+      return { line1, line2 };
+    }
+
+    /**
+     * computedSatellites: ユーザー入力（SatelliteInput）からダミーTLEを生成し、satellite.js を利用して
+     * シミュレーション時刻における衛星の地上トラック（緯度・経度の配列）を算出する computed プロパティの例
+     */
+    const computedSatellites = computed<SatelliteOrbit[]>(() => {
+      // ここでは、satellites.value は SatelliteInput[] 型の配列とする（ユーザー入力済み）
+      // ※以下は例として、入力データの配列を想定
+      // 例:
+      // const satellites = ref<SatelliteInput[]>([
+      //   { orbitType: 'inclined', launchLat: 30, launchLon: 140, altitude: 500, launchAngle: 0 },
+      //   { orbitType: 'sun-synchronous', launchLat: 0, launchLon: 0, altitude: 600, launchAngle: 5 },
+      // ]);
+      
+      return satellites.value.map((satInput) => {
+        // ダミーTLEを生成
+        const { line1, line2 } = generateDummyTLE(satInput);
+        // TLE から satrec を作成（SGP4 propagator を内部的に使用）
+        const satrec = satellite.twoline2satrec(line1, line2);
+        const orbitData: Array<{ lat: number; lng: number }> = [];
+
+        // シミュレーション開始時刻（現在時刻）
+        const startTime = new Date();
+
+        // SIM_DURATION ステップ分ループ
+        for (let t_sim = 0; t_sim <= SIM_DURATION; t_sim++) {
+          // 各ステップの実時間（秒）に換算
+          const t_offset_sec = t_sim * TIME_SCALE;
+          const currentTime = new Date(startTime.getTime() + t_offset_sec * 1000);
+
+          // propagate() を用いて ECI 座標（位置、速度）を計算
+          const posVel = satellite.propagate(satrec, currentTime);
+          if (posVel.position) {
+            // ECI 座標から GMST (Greenwich Mean Sidereal Time) を計算
+            const gmst = satellite.gstime(currentTime);
+            // ECI 座標を地球固定座標（ジオデティック：緯度、経度、高度）に変換
+            const geodetic = satellite.eciToGeodetic(posVel.position, gmst);
+            // 緯度・経度を度単位に変換
+            const lat = satellite.degreesLat(geodetic.latitude);
+            const lon = satellite.degreesLong(geodetic.longitude);
+            orbitData.push({ lat, lng: lon });
+          }
+        }
+        return { orbitData };
+      });
     });
-  });
-
 
     const startSimulation = () => {
       simulationStarted.value = true;

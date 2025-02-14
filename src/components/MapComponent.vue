@@ -48,7 +48,7 @@ export default defineComponent({
   },
   setup(props) {
     const map = ref<mapboxgl.Map | null>(null);
-    const is3D = ref(false);
+    const is3D = ref(true);
 
     onMounted(() => {
       mapboxgl.accessToken = props.accessToken;
@@ -58,7 +58,7 @@ export default defineComponent({
         center: [0, 0],
         zoom: 1.5,
         projection: "globe",
-        pitch: 60,
+        pitch: 0,
         bearing: 0,
       });
       if (m) {

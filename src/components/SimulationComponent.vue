@@ -129,26 +129,6 @@ interface SatelliteOrbit {
   orbitData: Array<{ lat: number; lng: number }>;
 }
 
-/*
-const reflectLatLon = (lat: number, lon: number): { lat: number; lon: number } => {
-    // 北極を超える場合
-    let retLat=lat, retLon=lon;
-    if (lat > 90) {
-      retLat = 180 - lat;
-      retLon += 180;
-    }
-    
-    // 南極を超える場合
-    if (lat < -90) {
-      retLat = -180 - lat;
-      retLon += 180;
-    }
-    // 経度を -180～180 の範囲に正規化
-    retLon = ((retLon + 180) % 360) - 180;
-    return { lat:retLat, lon:retLon };
-};
-*/
-
 export default defineComponent({
   name: "SimulationComponent",
   components: { MapComponent },

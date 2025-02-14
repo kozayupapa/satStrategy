@@ -4,11 +4,11 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, onBeforeUnmount } from 'vue';
-import mapboxgl from 'mapbox-gl';
+import { defineComponent, onMounted, onBeforeUnmount, watch } from "vue";
+import mapboxgl from "mapbox-gl";
 
 export default defineComponent({
-  name: 'AOIComponent',
+  name: "AOIComponent",
   props: {
     map: {
       type: Object as () => mapboxgl.Map,
@@ -24,34 +24,40 @@ export default defineComponent({
     let aoiMarker: mapboxgl.Marker | null = null;
 
     const addMarker = () => {
-      const el = document.createElement('div');
-      el.className = 'aoi-marker';
+      const el = document.createElement("div");
+      el.className = "aoi-marker";
       // ここでスタイルを直接設定してもOK
-      el.style.width = '30px';
-      el.style.height = '30px';
-      el.style.backgroundColor = 'blue';
-      el.style.border = '3px solid white';
-      el.style.borderRadius = '50%';
-      el.style.boxShadow = '0 0 5px rgba(0, 0, 0, 0.5)';
+      el.style.width = "30px";
+      el.style.height = "30px";
+      el.style.backgroundColor = "blue";
+      el.style.border = "3px solid white";
+      el.style.borderRadius = "50%";
+      el.style.boxShadow = "0 0 5px rgba(0, 0, 0, 0.5)";
       if (aoiMarker) {
         aoiMarker.remove();
       }
-      aoiMarker = new mapboxgl.Marker(el)
-        .setLngLat([props.aoiCoord.lon, props.aoiCoord.lat])
-        .addTo(props.map);
-      console.log('AOI marker added at:', props.aoiCoord);
+      aoiMarker = new mapboxgl.Marker(el).setLngLat([props.aoiCoord.lon, props.aoiCoord.lat]).addTo(props.map);
+      console.log("AOI marker added at:", props.aoiCoord);
     };
 
     onMounted(() => {
       if (props.map.isStyleLoaded()) {
         addMarker();
       } else {
-        props.map.once('load', () => {
+        props.map.once("load", () => {
           addMarker();
         });
       }
     });
 
+    // props.aoiCoordが変化したらマーカーを再作成
+    watch(
+      () => props.aoiCoord,
+      () => {
+        addMarker();
+      },
+      { deep: true },
+    );
     onBeforeUnmount(() => {
       aoiMarker?.remove();
     });

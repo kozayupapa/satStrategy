@@ -4,11 +4,7 @@
     <form @submit.prevent="startSimulation">
       <section>
         <h2>Satellites</h2>
-        <div
-          v-for="(sat, index) in satellites"
-          :key="index"
-          style="margin-bottom: 1rem; padding: 0.5rem; border: 1px solid #ccc;"
-        >
+        <div v-for="(sat, index) in satellites" :key="index" style="margin-bottom: 1rem; padding: 0.5rem; border: 1px solid #ccc">
           <label>
             Orbit Type:
             <select v-model="sat.orbitType">
@@ -19,40 +15,23 @@
           <div v-if="sat.orbitType === 'sun-synchronous'">
             <label>
               Launch Inclination Angle (deg):
-              <input 
-                type="number" 
-                step="any" 
-                :value="97.8" 
-                disabled
-              />
+              <input type="number" step="any" :value="97.8" disabled />
             </label>
           </div>
           <div v-else>
             <label>
               Launch Inclination Angle (deg):
-              <input 
-                type="number" 
-                step="any" 
-                v-model.number="sat.launchAngle" 
-              />
+              <input type="number" step="any" v-model.number="sat.launchAngle" />
             </label>
           </div>
           <div>
             <label>
               Launch Location Latitude:
-              <input 
-                type="number" 
-                step="any" 
-                v-model.number="sat.launchLat" 
-              />
+              <input type="number" step="any" v-model.number="sat.launchLat" />
             </label>
             <label>
               Launch Location Longitude:
-              <input 
-                type="number" 
-                step="any" 
-                v-model.number="sat.launchLon" 
-              />
+              <input type="number" step="any" v-model.number="sat.launchLon" />
             </label>
           </div>
           <div>
@@ -65,13 +44,9 @@
         <button type="button" @click="addSatellite">Add Satellite</button>
       </section>
 
-      <section style="margin-top: 1rem;">
+      <section style="margin-top: 1rem">
         <h2>AOI</h2>
-        <div
-          v-for="(aoi, index) in aois"
-          :key="index"
-          style="margin-bottom: 0.5rem;"
-        >
+        <div v-for="(aoi, index) in aois" :key="index" style="margin-bottom: 0.5rem">
           <label>
             AOI Latitude:
             <input type="number" v-model.number="aoi.lat" />
@@ -84,7 +59,7 @@
         <button type="button" @click="addAOI">Add AOI</button>
       </section>
 
-      <div style="margin-top: 1rem;">
+      <div style="margin-top: 1rem">
         <button type="submit">Start Simulation</button>
       </div>
     </form>
@@ -105,37 +80,38 @@
           <tr v-for="result in imagingWaitResults" :key="result.satelliteIndex + '-' + result.aoiIndex">
             <td>{{ result.satelliteIndex }}</td>
             <td>{{ result.aoiIndex }}</td>
-            <td>{{ result.avgWait !== null ? result.avgWait.toFixed(2) : 'N/A' }}</td>
-            <td>{{ result.maxWait !== null ? result.maxWait.toFixed(2) : 'N/A' }}</td>
-            <td>{{ result.imagingTimes.join(', ') }}</td>
+            <td>{{ result.avgWait !== null ? result.avgWait.toFixed(2) : "N/A" }}</td>
+            <td>{{ result.maxWait !== null ? result.maxWait.toFixed(2) : "N/A" }}</td>
+            <td>{{ result.imagingTimes.join(", ") }}</td>
           </tr>
         </tbody>
       </table>
     </div>
-    <div v-if="simulationStarted" style="margin-top: 2rem;">
+    <div v-if="simulationStarted" style="margin-top: 2rem">
       <!-- マップコンポーネントへ、計算済みの各衛星軌道データと AOI 情報を渡す -->
-      <MapComponent
-        :access-token="accessToken"
-        :satellites="computedSatellites"
-        :aois="aois"
-      />
+      <MapComponent :access-token="accessToken" :satellites="computedSatellites" :aois="aois" />
     </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed } from 'vue';
-import MapComponent from './MapComponent.vue';
-import * as satellite from 'satellite.js';
+import { defineComponent, ref, computed } from "vue";
+import MapComponent from "./MapComponent.vue";
+import * as satellite from "satellite.js";
 
-const R_EARTH = 6371;      // 地球半径 [km]
-const MU = 398600;         // 地球の重力定数 [km^3/s^2]
-const SIM_DURATION = 720;   // シミュレーションの秒数（例：1分間で1日分をシミュレーション）
-const TIME_SCALE = 60*60*24/SIM_DURATION;   // シミュレーション時刻と実時間の比（86400秒÷60秒）
+const R_EARTH = 6371; // 地球半径 [km]
+const MU = 398600; // 地球の重力定数 [km^3/s^2]
+const SIM_DURATION = 720; // シミュレーションの秒数（例：1分間で1日分をシミュレーション）
+const TIME_SCALE = (60 * 60 * 24) / SIM_DURATION; // シミュレーション時刻と実時間の比（86400秒÷60秒）
+export const ORBIT_TYPES = {
+  SUN_SYNCHRONOUS: "sun-synchronous",
+  INCLINED: "inclined",
+} as const;
 
+export type OrbitType = (typeof ORBIT_TYPES)[keyof typeof ORBIT_TYPES];
 // 各衛星の入力パラメータ
 interface SatelliteInput {
-  orbitType: 'sun-synchronous' | 'inclined';
+  orbitType: OrbitType;
   launchAngle: number; // 傾斜軌道の場合のみ有効（deg）
   launchLat: number;
   launchLon: number;
@@ -152,7 +128,6 @@ interface AOI {
 interface SatelliteOrbit {
   orbitData: Array<{ lat: number; lng: number }>;
 }
-
 
 /*
 const reflectLatLon = (lat: number, lon: number): { lat: number; lon: number } => {
@@ -175,15 +150,15 @@ const reflectLatLon = (lat: number, lon: number): { lat: number; lon: number } =
 */
 
 export default defineComponent({
-  name: 'SimulationComponent',
+  name: "SimulationComponent",
   components: { MapComponent },
   setup() {
-    const accessToken = ref('MAPBOX_TOKEN_REMOVED');
+    const accessToken = ref("MAPBOX_TOKEN_REMOVED");
 
     // 初期状態として 1 つの衛星、1 つの AOI を用意
     const satellitesRef = ref<SatelliteInput[]>([
       {
-        orbitType: 'sun-synchronous',
+        orbitType: ORBIT_TYPES.SUN_SYNCHRONOUS,
         launchAngle: 97.8, // sun-synchronous では固定
         launchLat: 0,
         launchLon: 0,
@@ -197,15 +172,13 @@ export default defineComponent({
       { orbitType: 'inclined', launchLat: 30, launchLon: 140, altitude: 500, launchAngle: 97.8 }
     ]);*/
 
-    const aois = ref<AOI[]>([
-      { lat: 15, lon: 15 },
-    ]);
+    const aois = ref<AOI[]>([{ lat: 15, lon: 15 }]);
 
     const simulationStarted = ref(false);
 
     const addSatellite = () => {
       satellitesRef.value.push({
-        orbitType: 'sun-synchronous',
+        orbitType: ORBIT_TYPES.SUN_SYNCHRONOUS,
         launchAngle: 97.8,
         launchLat: 0,
         launchLon: 0,
@@ -218,18 +191,18 @@ export default defineComponent({
     };
 
     const toRadians = (deg: number): number => {
-      return deg * Math.PI / 180;
+      return (deg * Math.PI) / 180;
     };
 
     const toDegrees = (rad: number): number => {
-      return rad * 180 / Math.PI;
+      return (rad * 180) / Math.PI;
     };
     const haversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
       const R = 6371;
       const dLat = toRadians(lat2 - lat1);
       const dLon = toRadians(lon2 - lon1);
-      const a = Math.sin(dLat/2)**2 + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon/2)**2;
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     };
     /**
@@ -262,28 +235,28 @@ export default defineComponent({
      * @returns { line1: string, line2: string } ダミーTLEの2行
      */
     const generateDummyTLE = (sat: SatelliteInput): { line1: string; line2: string } => {
-      // 'inclined' の場合は打ち上げ傾斜角を 97.8 固定
-      const inclination = sat.orbitType === 'inclined' ? 97.8 : sat.launchAngle;
+      // 'sun-synchronous' の場合は打ち上げ傾斜角を 97.8 固定
+      const inclination = sat.orbitType === ORBIT_TYPES.SUN_SYNCHRONOUS ? 97.8 : sat.launchAngle;
       // RAAN を打ち上げ経度として簡易設定
       const raan = sat.launchLon;
       //const eccentricity = 0;       // 円軌道と仮定
-      const argPerigee = 0;         // 近地点引数：0
-      const meanAnomaly = 0;        // 平均近点角：0
+      const argPerigee = 0; // 近地点引数：0
+      const meanAnomaly = 0; // 平均近点角：0
 
       // 平均運動 (revs per day) の計算
       const semiMajorAxis = R_EARTH + sat.altitude; // km
       const n = Math.sqrt(MU / Math.pow(semiMajorAxis, 3)); // rad/s
-      const meanMotion = n * 86400 / (2 * Math.PI); // revs per day
+      const meanMotion = (n * 86400) / (2 * Math.PI); // revs per day
 
       // Epoch の生成（TLE epoch は YYDDD.DDDDDDDD 形式）
       const now = new Date();
       const year = now.getUTCFullYear() % 100; // 下2桁
       const startOfYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
       const dayOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      const secondsOfDay = now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds() + now.getUTCMilliseconds()/1000;
+      const secondsOfDay = now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds() + now.getUTCMilliseconds() / 1000;
       const fraction = secondsOfDay / 86400;
       // Epoch を "YYDDD.DDDDDDDD" 形式に整形（ここでは小数部は 8 桁固定）
-      const epoch = `${year.toString().padStart(2, '0')}${dayOfYear.toString().padStart(3, '0')}.${fraction.toFixed(8).slice(2)}`;
+      const epoch = `${year.toString().padStart(2, "0")}${dayOfYear.toString().padStart(3, "0")}.${fraction.toFixed(8).slice(2)}`;
 
       // ダミーの衛星番号（"00001" で固定）
       const satNum = "00001";
@@ -299,17 +272,17 @@ export default defineComponent({
       // - Argument of Perigee: 8桁
       // - Mean Anomaly: 8桁
       // - Mean Motion: 11桁（小数点含む）
-      const inclStr = inclination.toFixed(4).padStart(8, ' ');
-      const raanStr = raan.toFixed(4).padStart(8, ' ');
+      const inclStr = inclination.toFixed(4).padStart(8, " ");
+      const raanStr = raan.toFixed(4).padStart(8, " ");
       const eccStr = "0000000"; // ecc = 0
-      const argPerigeeStr = argPerigee.toFixed(4).padStart(8, ' ');
-      const meanAnomalyStr = meanAnomaly.toFixed(4).padStart(8, ' ');
-      const meanMotionStr = meanMotion.toFixed(8).padStart(11, ' ');
+      const argPerigeeStr = argPerigee.toFixed(4).padStart(8, " ");
+      const meanAnomalyStr = meanAnomaly.toFixed(4).padStart(8, " ");
+      const meanMotionStr = meanMotion.toFixed(8).padStart(11, " ");
 
       const line2 = `2 ${satNum} ${inclStr} ${raanStr} ${eccStr} ${argPerigeeStr} ${meanAnomalyStr} ${meanMotionStr}`;
-      
+
       return { line1, line2 };
-    }
+    };
 
     /**
      * computedSatellites: ユーザー入力（SatelliteInput）からダミーTLEを生成し、satellite.js を利用して
@@ -323,7 +296,7 @@ export default defineComponent({
       //   { orbitType: 'inclined', launchLat: 30, launchLon: 140, altitude: 500, launchAngle: 0 },
       //   { orbitType: 'sun-synchronous', launchLat: 0, launchLon: 0, altitude: 600, launchAngle: 5 },
       // ]);
-      
+
       return satellitesRef.value.map((satInput) => {
         // ダミーTLEを生成
         const { line1, line2 } = generateDummyTLE(satInput);
@@ -342,7 +315,7 @@ export default defineComponent({
 
           // propagate() を用いて ECI 座標（位置、速度）を計算
           const posVel = satellite.propagate(satrec, currentTime);
-          if (posVel.position && typeof posVel.position !== 'boolean') {
+          if (posVel.position && typeof posVel.position !== "boolean") {
             // ECI 座標から GMST (Greenwich Mean Sidereal Time) を計算
             const gmst = satellite.gstime(currentTime);
             // ECI 座標を地球固定座標（ジオデティック：緯度、経度、高度）に変換
@@ -368,12 +341,12 @@ export default defineComponent({
         imagingTimes: number[];
       }> = [];
       const lateralTolerance = 5; // 真横条件の許容誤差（度）
-      const offNadirMin = 20;     // Off-Nadir 角の下限 (度)
-      const offNadirMax = 45;     // Off-Nadir 角の上限 (度)
+      const offNadirMin = 20; // Off-Nadir 角の下限 (度)
+      const offNadirMax = 45; // Off-Nadir 角の上限 (度)
       const TIME_SCALE_LOCAL = TIME_SCALE;
-      
+
       computedSatellites.value.forEach((satOrbit, satIndex) => {
-        const {orbitData} = satOrbit;
+        const { orbitData } = satOrbit;
         aois.value.forEach((aoi, aoiIndex) => {
           const imagingTimes: number[] = [];
           for (let i = 0; i < orbitData.length - 1; i++) {
@@ -436,7 +409,7 @@ export default defineComponent({
       simulationStarted,
       startSimulation,
       computedSatellites,
-      imagingWaitResults,      
+      imagingWaitResults,
     };
   },
 });
@@ -453,7 +426,8 @@ form {
   padding: 1rem;
   margin-bottom: 1rem;
 }
-.satellite-input, .aoi-input {
+.satellite-input,
+.aoi-input {
   margin-bottom: 1rem;
 }
 .results table {

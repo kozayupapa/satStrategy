@@ -15,29 +15,33 @@
           <div v-if="sat.orbitType === 'sun-synchronous'">
             <label>
               Launch Inclination Angle (deg):
-              <input type="number" step="any" :value="97.8" disabled />
+              <input type="number" step="any" :value="sat.launchAngle.toFixed(2)" disabled />
             </label>
           </div>
           <div v-else>
             <label>
               Launch Inclination Angle (deg):
-              <input type="number" step="any" v-model.number="sat.launchAngle" />
+              <input type="number" step="any" v-model.lazy.number="sat.launchAngle" />
             </label>
           </div>
           <div>
             <label>
               Launch Location Latitude:
-              <input type="number" step="any" v-model.number="sat.launchLat" />
+              <input type="number" step="any" v-model.lazy.number="sat.launchLat" />
             </label>
             <label>
               Launch Location Longitude:
-              <input type="number" step="any" v-model.number="sat.launchLon" />
+              <input type="number" step="any" v-model.lazy.number="sat.launchLon" />
             </label>
           </div>
           <div>
             <label>
               Altitude (km):
-              <input type="number" v-model.number="sat.altitude" />
+              <input type="number" v-model.lazy.number="sat.altitude" />
+            </label>
+            <label>
+              meanMotion (revs per day):
+              <input type="number" step="any" :value="sat.meanMotion?.toFixed(2)" disabled />
             </label>
           </div>
         </div>
@@ -49,11 +53,11 @@
         <div v-for="(aoi, index) in aois" :key="index" style="margin-bottom: 0.5rem">
           <label>
             AOI Latitude:
-            <input type="number" v-model.number="aoi.lat" />
+            <input type="number" step="any" v-model.lazy.number="aoi.lat" />
           </label>
           <label>
             AOI Longitude:
-            <input type="number" v-model.number="aoi.lon" />
+            <input type="number" step="any" v-model.lazy.number="aoi.lon" />
           </label>
         </div>
         <button type="button" @click="addAOI">Add AOI</button>
@@ -99,9 +103,9 @@ import { defineComponent, ref, computed } from "vue";
 import MapComponent from "./MapComponent.vue";
 import * as satellite from "satellite.js";
 
-const R_EARTH = 6371; // 地球半径 [km]
-const MU = 398600; // 地球の重力定数 [km^3/s^2]
-const SIM_DURATION = 720; // シミュレーションの秒数（例：1分間で1日分をシミュレーション）
+const R_EARTH = 6378.137; // 地球半径 [km]
+const MU = 398600.4418; // 地球の重力定数 [km^3/s^2]
+const SIM_DURATION = 7200; // シミュレーションの秒数これをある程度の大きくしないと解像度が足りず距離が判定できない
 const TIME_SCALE = (60 * 60 * 24) / SIM_DURATION; // シミュレーション時刻と実時間の比（86400秒÷60秒）
 export const ORBIT_TYPES = {
   SUN_SYNCHRONOUS: "sun-synchronous",
@@ -116,6 +120,7 @@ interface SatelliteInput {
   launchLat: number;
   launchLon: number;
   altitude: number; // [km]
+  meanMotion: number | null; // revs per day
 }
 
 // AOI の座標
@@ -140,9 +145,18 @@ export default defineComponent({
       {
         orbitType: ORBIT_TYPES.SUN_SYNCHRONOUS,
         launchAngle: 97.8, // sun-synchronous では固定
-        launchLat: 0,
-        launchLon: 0,
+        launchLat: 33.61,
+        launchLon: 142.83,
         altitude: 500, // km
+        meanMotion: null,
+      },
+      {
+        orbitType: ORBIT_TYPES.INCLINED,
+        launchAngle: 45, // sun-synchronous では固定
+        launchLat: 33.61,
+        launchLon: 142.83,
+        altitude: 550, // km
+        meanMotion: null,
       },
     ]);
 
@@ -152,7 +166,13 @@ export default defineComponent({
       { orbitType: 'inclined', launchLat: 30, launchLon: 140, altitude: 500, launchAngle: 97.8 }
     ]);*/
 
-    const aois = ref<AOI[]>([{ lat: 15, lon: 15 }]);
+    const aois = ref<AOI[]>([
+      { lat: 35.77, lon: 139.82 },
+      { lat: 24.33, lon: 119.78 },
+      { lat: 50.45, lon: 30.52 },
+      { lat: 31.58, lon: 34.98 },
+      { lat: 29.77, lon: -102.45 },
+    ]);
 
     const simulationStarted = ref(false);
 
@@ -160,14 +180,15 @@ export default defineComponent({
       satellitesRef.value.push({
         orbitType: ORBIT_TYPES.SUN_SYNCHRONOUS,
         launchAngle: 97.8,
-        launchLat: 0,
-        launchLon: 0,
+        launchLat: 35.61,
+        launchLon: 141.83,
         altitude: 500,
+        meanMotion: null,
       });
     };
 
     const addAOI = () => {
-      aois.value.push({ lat: 0, lon: 0 });
+      aois.value.push({ lat: 35.77, lon: 139.82 });
     };
 
     const toRadians = (deg: number): number => {
@@ -178,12 +199,11 @@ export default defineComponent({
       return (rad * 180) / Math.PI;
     };
     const haversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-      const R = 6371;
       const dLat = toRadians(lat2 - lat1);
       const dLon = toRadians(lon2 - lon1);
       const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
+      return R_EARTH * c;
     };
     /**
      * 2点 (lat1, lon1) から (lat2, lon2) までの方位角（真北から時計回り、度）を計算
@@ -209,6 +229,34 @@ export default defineComponent({
       return diff;
     };
 
+    const J2 = 1.08262668e-3;
+    // 太陽同期軌道に必要な昇交点回帰率（rad/s）
+    // 1年 = 365.2422日 → 365.2422 * 86400秒
+    const dOmegadt_required = (-2 * Math.PI) / (365.2422 * 86400); // 約 -1.99e-7 rad/s
+
+    /**
+     * 与えられた高度 (km) に対して必要な太陽同期軌道の傾斜角（deg）を計算する関数
+     * 円軌道 (ecc=0) を仮定
+     */
+    const calculateSunSyncInclination = (altitude: number): number => {
+      // 軌道半径
+      const a = R_EARTH + altitude; // km
+      // 平均運動 (rad/s)
+      const n = Math.sqrt(MU / Math.pow(a, 3));
+      // cos i を計算
+      // dOmegadt_required = - (3/2) * J2 * (RE/a)^2 * n * cos i
+      // → cos i = - (dOmegadt_required) / [ (3/2) * J2 * (RE/a)^2 * n ]
+      const cos_i = -dOmegadt_required / ((3 / 2) * J2 * Math.pow(R_EARTH / a, 2) * n);
+      // 防衛的に cos_i を [-1,1] にクランプ
+      const clampedCosI = Math.max(-1, Math.min(1, cos_i));
+      // i (rad) を計算
+      const i_rad = Math.acos(clampedCosI);
+      // 太陽同期軌道は後退軌道 (i > 90°) となるため、
+      // 必要な傾斜角は 180° - i (deg)
+      const i_deg = toDegrees(i_rad);
+      return 180 - i_deg;
+    };
+
     /**
      * ユーザー入力からダミーTLEを生成する関数
      * @param sat ユーザーが入力した衛星パラメータ
@@ -216,7 +264,8 @@ export default defineComponent({
      */
     const generateDummyTLE = (sat: SatelliteInput): { line1: string; line2: string } => {
       // 'sun-synchronous' の場合は打ち上げ傾斜角を 97.8 固定
-      const inclination = sat.orbitType === ORBIT_TYPES.SUN_SYNCHRONOUS ? 97.8 : sat.launchAngle;
+      const inclination = sat.orbitType === ORBIT_TYPES.SUN_SYNCHRONOUS ? calculateSunSyncInclination(sat.altitude) : sat.launchAngle;
+      if (sat.orbitType === ORBIT_TYPES.SUN_SYNCHRONOUS) sat.launchAngle = inclination;
       // RAAN を打ち上げ経度として簡易設定
       const raan = sat.launchLon;
       //const eccentricity = 0;       // 円軌道と仮定
@@ -227,6 +276,8 @@ export default defineComponent({
       const semiMajorAxis = R_EARTH + sat.altitude; // km
       const n = Math.sqrt(MU / Math.pow(semiMajorAxis, 3)); // rad/s
       const meanMotion = (n * 86400) / (2 * Math.PI); // revs per day
+      sat.meanMotion = meanMotion;
+      console.log(`alt:${sat.altitude},maj:${semiMajorAxis},n:${n},mot:${meanMotion}`);
 
       // Epoch の生成（TLE epoch は YYDDD.DDDDDDDD 形式）
       const now = new Date();
@@ -310,6 +361,11 @@ export default defineComponent({
       });
     });
 
+    const lateralTolerance = 9; // 真横条件の許容誤差（度）
+    const offNadirMin = 15; // Off-Nadir 角の下限 (度)
+    const offNadirMax = 65; // Off-Nadir 角の上限 (度)
+    const TIME_SCALE_LOCAL = TIME_SCALE;
+
     // imagingWaitResults: 各衛星軌道と各 AOI の組み合わせで、撮像条件を満たすタイミングを抽出し、
     // 撮像間隔から平均待ち時間と最大待ち時間を計算する
     const imagingWaitResults = computed(() => {
@@ -320,10 +376,6 @@ export default defineComponent({
         maxWait: number | null;
         imagingTimes: number[];
       }> = [];
-      const lateralTolerance = 5; // 真横条件の許容誤差（度）
-      const offNadirMin = 20; // Off-Nadir 角の下限 (度)
-      const offNadirMax = 45; // Off-Nadir 角の上限 (度)
-      const TIME_SCALE_LOCAL = TIME_SCALE;
 
       computedSatellites.value.forEach((satOrbit, satIndex) => {
         const { orbitData } = satOrbit;
@@ -343,19 +395,27 @@ export default defineComponent({
               const distance = haversineDistance(currentPos.lat, currentPos.lng, aoi.lat, aoi.lon);
               // offNadir = arctan(distance / altitude) (sat.altitude in km)
               const offNadirDeg = toDegrees(Math.atan(distance / satellitesRef.value?.[satIndex].altitude));
-              if (offNadirDeg >= offNadirMin && offNadirDeg <= offNadirMax) {
+              // console.log(
+              //   `Sat${satIndex} , AOI${aoiIndex} , step ${i}: heading=${heading.toFixed(2)}, lateral1=${lateral1.toFixed(2)}, lateral2=${lateral2.toFixed(2)},bearingToAOI=${bearingToAOI.toFixed(2)}, diff1=${diff1.toFixed(2)}, diff2=${diff2.toFixed(2)}`,
+              // );
+              console.log(
+                `S${satIndex}A${aoiIndex}[${i}] lat${currentPos.lat.toFixed(2)}lon${currentPos.lng.toFixed(2)} Distance: ${distance.toFixed(2)} km, offNadirDeg: ${offNadirDeg.toFixed(2)}`,
+              );
+              const last = imagingTimes.at(-1);
+              if (offNadirDeg >= offNadirMin && offNadirDeg <= offNadirMax && (last ? i * TIME_SCALE_LOCAL - last > 600 : true)) {
                 imagingTimes.push(i * TIME_SCALE_LOCAL);
               }
             }
           }
           if (imagingTimes.length >= 2) {
             const intervals: number[] = [];
+            intervals.push(imagingTimes[0]);
             for (let j = 0; j < imagingTimes.length - 1; j++) {
               intervals.push(imagingTimes[j + 1] - imagingTimes[j]);
             }
             const avgInterval = intervals.reduce((sum, dt) => sum + dt, 0) / intervals.length;
-            const avgWait = avgInterval / 2;
-            const maxWait = Math.max(...intervals);
+            const avgWait = Math.round(avgInterval / 2 / 36) / 100;
+            const maxWait = Math.round(Math.max(...intervals) / 36) / 100;
             results.push({
               satelliteIndex: satIndex,
               aoiIndex: aoiIndex,
@@ -379,7 +439,58 @@ export default defineComponent({
     const startSimulation = () => {
       simulationStarted.value = true;
     };
+    // ダミーの軌道データ（例：固定の座標群）
+    /*
+    const dummyOrbitData = [
+      { lat: 30, lng: 140 },
+      { lat: 30.1, lng: 140.2 },
+      { lat: 30.2, lng: 140.4 },
+      { lat: 30.3, lng: 140.6 },
+      { lat: 30.4, lng: 140.8 },
+      { lat: 30.5, lng: 141.0 },
+      { lat: 30.6, lng: 141.2 },
+      { lat: 30.7, lng: 141.4 },
+      { lat: 30.75, lng: 141.5 },
+      { lat: 30.8, lng: 141.6 },
+      { lat: 30.9, lng: 141.8 },
+      { lat: 31, lng: 142.0 },
+    ];
 
+    // ダミーの AOI（固定値）
+    const dummyAOI = { lat: 31.5, lon: 139 };
+    // 仮に衛星高度は 500 km とする
+    const dummyAltitude = 500;
+    // ダミーの撮像タイミングを計算
+    const imagingTimes = [];
+    // 軌道データの各隣接点で計算（インデックスがタイムステップとみなす）
+    for (let i = 0; i < dummyOrbitData.length - 1; i++) {
+      const currentPos = dummyOrbitData[i];
+      const nextPos = dummyOrbitData[i + 1];
+      const heading = computeBearing(currentPos.lat, currentPos.lng, nextPos.lat, nextPos.lng);
+      const lateral1 = (heading + 90) % 360;
+      const lateral2 = (heading + 270) % 360;
+      const bearingToAOI = computeBearing(currentPos.lat, currentPos.lng, dummyAOI.lat, dummyAOI.lon);
+      const diff1 = angleDifference(bearingToAOI, lateral1);
+      const diff2 = angleDifference(bearingToAOI, lateral2);
+
+      console.log(
+        `Sat , AOI , step ${i}: heading=${heading.toFixed(2)}, lateral1=${lateral1.toFixed(2)}, lateral2=${lateral2.toFixed(2)},bearingToAOI=${bearingToAOI.toFixed(2)}, diff1=${diff1.toFixed(2)}, diff2=${diff2.toFixed(2)}`,
+      );
+
+      // 真横条件を満たすかチェック
+      if (diff1 <= lateralTolerance || diff2 <= lateralTolerance) {
+        // 地上距離を計算（km）
+        const distance = haversineDistance(currentPos.lat, currentPos.lng, dummyAOI.lat, dummyAOI.lon);
+        // Off-Nadir 角: arctan(distance / altitude) （度に変換）
+        const offNadirDeg = toDegrees(Math.atan(distance / dummyAltitude));
+        console.log(`Distance: ${distance.toFixed(2)} km, offNadirDeg: ${offNadirDeg.toFixed(2)}`);
+        if (offNadirDeg >= offNadirMin && offNadirDeg <= offNadirMax) {
+          imagingTimes.push(i * TIME_SCALE_LOCAL);
+        }
+        console.log("Calculated Imaging Times (sec):", imagingTimes);
+      }
+    }
+    */
     return {
       accessToken,
       addSatellite,

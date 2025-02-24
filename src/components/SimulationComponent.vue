@@ -75,9 +75,9 @@
           <tr>
             <th>Satellite Index</th>
             <th>AOI Index</th>
-            <th>Average Wait Time (sec)</th>
-            <th>Maximum Wait Time (sec)</th>
-            <th>Imaging Times (sec)</th>
+            <th>Average Wait Time (hour)</th>
+            <th>Maximum Wait Time (hour)</th>
+            <th>Imaging Times (hour)</th>
           </tr>
         </thead>
         <tbody>
@@ -105,8 +105,10 @@ import * as satellite from "satellite.js";
 
 const R_EARTH = 6378.137; // 地球半径 [km]
 const MU = 398600.4418; // 地球の重力定数 [km^3/s^2]
-const SIM_DURATION = 7200; // シミュレーションの秒数これをある程度の大きくしないと解像度が足りず距離が判定できない
-const TIME_SCALE = (60 * 60 * 24) / SIM_DURATION; // シミュレーション時刻と実時間の比（86400秒÷60秒）
+const TIME_SCALE = 10; // シミュレーション時刻と実時間の比 1 step = 10 sec これをある程度の小さく解像度が足りず近距離が判定できない
+const SIM_DAYS = 10;
+const SIM_DURATION = (60 * 60 * 24 * SIM_DAYS) / TIME_SCALE;
+
 export const ORBIT_TYPES = {
   SUN_SYNCHRONOUS: "sun-synchronous",
   INCLINED: "inclined",
@@ -167,11 +169,11 @@ export default defineComponent({
     ]);*/
 
     const aois = ref<AOI[]>([
-      { lat: 35.77, lon: 139.82 },
-      { lat: 24.33, lon: 119.78 },
-      { lat: 50.45, lon: 30.52 },
-      { lat: 31.58, lon: 34.98 },
-      { lat: 29.77, lon: -102.45 },
+      { lat: 35.77, lon: 139.82 }, //Tokyo
+      { lat: 24.33, lon: 119.78 }, //Taiwan
+      { lat: 50.45, lon: 30.52 }, //Ukraine
+      { lat: 31.58, lon: 34.98 }, //Israel
+      { lat: 29.77, lon: -102.45 }, //USA-Mexico
     ]);
 
     const simulationStarted = ref(false);
@@ -188,7 +190,7 @@ export default defineComponent({
     };
 
     const addAOI = () => {
-      aois.value.push({ lat: 35.77, lon: 139.82 });
+      aois.value.push({ lat: 0, lon: 0 });
     };
 
     const toRadians = (deg: number): number => {
@@ -363,7 +365,7 @@ export default defineComponent({
 
     const lateralTolerance = 9; // 真横条件の許容誤差（度）
     const offNadirMin = 15; // Off-Nadir 角の下限 (度)
-    const offNadirMax = 65; // Off-Nadir 角の上限 (度)
+    const offNadirMax = 50; // Off-Nadir 角の上限 (度)
     const TIME_SCALE_LOCAL = TIME_SCALE;
 
     // imagingWaitResults: 各衛星軌道と各 AOI の組み合わせで、撮像条件を満たすタイミングを抽出し、
@@ -396,14 +398,12 @@ export default defineComponent({
               // offNadir = arctan(distance / altitude) (sat.altitude in km)
               const offNadirDeg = toDegrees(Math.atan(distance / satellitesRef.value?.[satIndex].altitude));
               // console.log(
-              //   `Sat${satIndex} , AOI${aoiIndex} , step ${i}: heading=${heading.toFixed(2)}, lateral1=${lateral1.toFixed(2)}, lateral2=${lateral2.toFixed(2)},bearingToAOI=${bearingToAOI.toFixed(2)}, diff1=${diff1.toFixed(2)}, diff2=${diff2.toFixed(2)}`,
+              //   `S${satIndex}A${aoiIndex}[${i}] lat${currentPos.lat.toFixed(2)}lon${currentPos.lng.toFixed(2)} Distance: ${distance.toFixed(2)} km, offNadirDeg: ${offNadirDeg.toFixed(2)}`,
               // );
-              console.log(
-                `S${satIndex}A${aoiIndex}[${i}] lat${currentPos.lat.toFixed(2)}lon${currentPos.lng.toFixed(2)} Distance: ${distance.toFixed(2)} km, offNadirDeg: ${offNadirDeg.toFixed(2)}`,
-              );
               const last = imagingTimes.at(-1);
-              if (offNadirDeg >= offNadirMin && offNadirDeg <= offNadirMax && (last ? i * TIME_SCALE_LOCAL - last > 600 : true)) {
-                imagingTimes.push(i * TIME_SCALE_LOCAL);
+              const current = Math.round((i * TIME_SCALE_LOCAL) / 2 / 36) / 100;
+              if (offNadirDeg >= offNadirMin && offNadirDeg <= offNadirMax && (last ? current - last > 0.2 : true)) {
+                imagingTimes.push(current);
               }
             }
           }
@@ -414,8 +414,8 @@ export default defineComponent({
               intervals.push(imagingTimes[j + 1] - imagingTimes[j]);
             }
             const avgInterval = intervals.reduce((sum, dt) => sum + dt, 0) / intervals.length;
-            const avgWait = Math.round(avgInterval / 2 / 36) / 100;
-            const maxWait = Math.round(Math.max(...intervals) / 36) / 100;
+            const avgWait = Math.round(avgInterval * 100) / 100;
+            const maxWait = Math.round(Math.max(...intervals) * 100) / 100;
             results.push({
               satelliteIndex: satIndex,
               aoiIndex: aoiIndex,

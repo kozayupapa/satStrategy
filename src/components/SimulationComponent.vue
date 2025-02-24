@@ -111,6 +111,27 @@
         </tbody>
       </table>
     </div>
+    <div v-if="aggregatedImagingWaitResults.length > 0" class="results">
+      <h2 class="text-3xl font-bold text-gray-900">Aggregated Imaging Wait Times</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>AOI Index</th>
+            <th>Average Wait Time (hour)</th>
+            <th>Maximum Wait Time (hour)</th>
+            <th>Imaging Times (hour)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="result in aggregatedImagingWaitResults" :key="result.aoiIndex">
+            <td>{{ result.aoiIndex }}</td>
+            <td>{{ result.avgWait !== null ? result.avgWait.toFixed(2) : "N/A" }}</td>
+            <td>{{ result.maxWait !== null ? result.maxWait.toFixed(2) : "N/A" }}</td>
+            <td>{{ result.imagingTimes.join(", ") }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </template>
 
@@ -452,61 +473,47 @@ export default defineComponent({
       });
       return results;
     });
+
+    const aggregatedImagingWaitResults = computed(() => {
+      const results: Record<number, { avgWait: number; maxWait: number; count: number; imagingTimes: number[] }> = {};
+
+      imagingWaitResults.value.forEach(({ aoiIndex, imagingTimes }) => {
+        if (!results[aoiIndex]) {
+          results[aoiIndex] = { avgWait: 0, maxWait: 0, count: 0, imagingTimes: [] };
+        }
+        results[aoiIndex].imagingTimes.push(...imagingTimes);
+      });
+
+      return Object.entries(results).map(([aoiIndex, data]) => {
+        if (data.imagingTimes.length >= 2) {
+          data.imagingTimes.sort((a, b) => a - b);
+          const intervals: number[] = [];
+          intervals.push(data.imagingTimes[0]);
+          for (let j = 0; j < data.imagingTimes.length - 1; j++) {
+            intervals.push(data.imagingTimes[j + 1] - data.imagingTimes[j]);
+          }
+          const avgInterval = intervals.reduce((sum, dt) => sum + dt, 0) / intervals.length;
+          const avgWait = Math.round(avgInterval * 100) / 100;
+          const maxWait = Math.round(Math.max(...intervals) * 100) / 100;
+          return {
+            aoiIndex: Number(aoiIndex),
+            avgWait,
+            maxWait,
+            imagingTimes: data.imagingTimes,
+          };
+        }
+        return {
+          aoiIndex: Number(aoiIndex),
+          avgWait: 0,
+          maxWait: 0,
+          imagingTimes: data.imagingTimes,
+        };
+      });
+    });
     const startSimulation = () => {
       simulationStarted.value = true;
     };
-    // ダミーの軌道データ（例：固定の座標群）
-    /*
-    const dummyOrbitData = [
-      { lat: 30, lng: 140 },
-      { lat: 30.1, lng: 140.2 },
-      { lat: 30.2, lng: 140.4 },
-      { lat: 30.3, lng: 140.6 },
-      { lat: 30.4, lng: 140.8 },
-      { lat: 30.5, lng: 141.0 },
-      { lat: 30.6, lng: 141.2 },
-      { lat: 30.7, lng: 141.4 },
-      { lat: 30.75, lng: 141.5 },
-      { lat: 30.8, lng: 141.6 },
-      { lat: 30.9, lng: 141.8 },
-      { lat: 31, lng: 142.0 },
-    ];
 
-    // ダミーの AOI（固定値）
-    const dummyAOI = { lat: 31.5, lon: 139 };
-    // 仮に衛星高度は 500 km とする
-    const dummyAltitude = 500;
-    // ダミーの撮像タイミングを計算
-    const imagingTimes = [];
-    // 軌道データの各隣接点で計算（インデックスがタイムステップとみなす）
-    for (let i = 0; i < dummyOrbitData.length - 1; i++) {
-      const currentPos = dummyOrbitData[i];
-      const nextPos = dummyOrbitData[i + 1];
-      const heading = computeBearing(currentPos.lat, currentPos.lng, nextPos.lat, nextPos.lng);
-      const lateral1 = (heading + 90) % 360;
-      const lateral2 = (heading + 270) % 360;
-      const bearingToAOI = computeBearing(currentPos.lat, currentPos.lng, dummyAOI.lat, dummyAOI.lon);
-      const diff1 = angleDifference(bearingToAOI, lateral1);
-      const diff2 = angleDifference(bearingToAOI, lateral2);
-
-      console.log(
-        `Sat , AOI , step ${i}: heading=${heading.toFixed(2)}, lateral1=${lateral1.toFixed(2)}, lateral2=${lateral2.toFixed(2)},bearingToAOI=${bearingToAOI.toFixed(2)}, diff1=${diff1.toFixed(2)}, diff2=${diff2.toFixed(2)}`,
-      );
-
-      // 真横条件を満たすかチェック
-      if (diff1 <= lateralTolerance || diff2 <= lateralTolerance) {
-        // 地上距離を計算（km）
-        const distance = haversineDistance(currentPos.lat, currentPos.lng, dummyAOI.lat, dummyAOI.lon);
-        // Off-Nadir 角: arctan(distance / altitude) （度に変換）
-        const offNadirDeg = toDegrees(Math.atan(distance / dummyAltitude));
-        console.log(`Distance: ${distance.toFixed(2)} km, offNadirDeg: ${offNadirDeg.toFixed(2)}`);
-        if (offNadirDeg >= offNadirMin && offNadirDeg <= offNadirMax) {
-          imagingTimes.push(i * TIME_SCALE_LOCAL);
-        }
-        console.log("Calculated Imaging Times (sec):", imagingTimes);
-      }
-    }
-    */
     return {
       accessToken,
       addSatellite,
@@ -517,6 +524,7 @@ export default defineComponent({
       startSimulation,
       computedSatellites,
       imagingWaitResults,
+      aggregatedImagingWaitResults,
     };
   },
 });

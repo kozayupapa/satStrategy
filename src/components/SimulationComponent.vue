@@ -1,6 +1,5 @@
 <template>
   <div>
-    <h1>Satellite & AOI setting</h1>
     <form @submit.prevent="startSimulation">
       <section>
         <h2 class="text-3xl font-bold text-gray-900">Satellites</h2>

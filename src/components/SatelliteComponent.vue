@@ -4,12 +4,13 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, onBeforeUnmount, watch } from 'vue';
-import mapboxgl from 'mapbox-gl';
-import type { Feature, LineString } from 'geojson';
+import { defineComponent, onMounted, onBeforeUnmount, watch } from "vue";
+import mapboxgl from "mapbox-gl";
+import type { Feature, LineString } from "geojson";
+import { SIM_DAYS, SIM_DURATION } from "./SimulationComponent.vue";
 
 export default defineComponent({
-  name: 'SatelliteComponent',
+  name: "SatelliteComponent",
   props: {
     map: {
       type: Object as () => mapboxgl.Map,
@@ -35,7 +36,7 @@ export default defineComponent({
         type: "Feature", // リテラル "Feature" を指定
         geometry: {
           type: "LineString", // リテラル "LineString" を指定
-          coordinates: props.orbitData.map(point => [point.lng, point.lat]),
+          coordinates: props.orbitData.slice(0, SIM_DURATION / SIM_DAYS).map((point) => [point.lng, point.lat]),
         },
         properties: {},
       };
@@ -43,20 +44,20 @@ export default defineComponent({
         (props.map.getSource(orbitSourceId) as mapboxgl.GeoJSONSource).setData(geojson);
       } else {
         props.map.addSource(orbitSourceId, {
-          type: 'geojson',
+          type: "geojson",
           data: geojson,
         });
         props.map.addLayer({
           id: orbitLayerId,
-          type: 'line',
+          type: "line",
           source: orbitSourceId,
           layout: {
-            'line-join': 'round',
-            'line-cap': 'round',
+            "line-join": "round",
+            "line-cap": "round",
           },
           paint: {
-            'line-color': '#FF0000',
-            'line-width': 1,
+            "line-color": "#FF0000",
+            "line-width": 1,
           },
         });
       }
@@ -86,30 +87,27 @@ export default defineComponent({
     };
 
     const addMarker = () => {
-      const el = document.createElement('div');
-      el.className = 'satellite-marker';
-      el.style.width = '30px';
-      el.style.height = '30px';
-      el.style.backgroundColor = 'red';
-      el.style.border = '1px solid white';
-      el.style.borderRadius = '50%';
-      el.style.boxShadow = '0 0 5px rgba(0, 0, 0, 0.5)';
+      const el = document.createElement("div");
+      el.className = "satellite-marker";
+      el.style.width = "30px";
+      el.style.height = "30px";
+      el.style.backgroundColor = "red";
+      el.style.border = "1px solid white";
+      el.style.borderRadius = "50%";
+      el.style.boxShadow = "0 0 5px rgba(0, 0, 0, 0.5)";
 
       console.log(props.orbitData);
 
-      satelliteMarker = new mapboxgl.Marker(el)
-        .setLngLat([props.orbitData[0].lng, props.orbitData[0].lat])
-        .addTo(props.map);
+      satelliteMarker = new mapboxgl.Marker(el).setLngLat([props.orbitData[0].lng, props.orbitData[0].lat]).addTo(props.map);
     };
 
     onMounted(() => {
-
       if (props.map.isStyleLoaded()) {
         addMarker();
         createOrbitLine();
         startAnimation();
       } else {
-        props.map.once('load', () => {
+        props.map.once("load", () => {
           addMarker();
           createOrbitLine();
           startAnimation();
@@ -128,11 +126,14 @@ export default defineComponent({
       }
     });
 
-    watch(() => props.orbitData, () => {
-      createOrbitLine();
-      animationIndex = 0;
-      startAnimation();
-    });
+    watch(
+      () => props.orbitData,
+      () => {
+        createOrbitLine();
+        animationIndex = 0;
+        startAnimation();
+      },
+    );
 
     return {};
   },

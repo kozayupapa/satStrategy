@@ -7,7 +7,7 @@
             <div class="inline-flex h-14 w-14 flex-shrink-0 cursor-pointer items-center justify-center" @click="toggleMenu()">
               <span class="material-symbols-outlined text-warmgray-900 text-opacity-60">menu</span>
             </div>
-            <div class="w-full items-center">Firebase Vue3 kit</div>
+            <div class="w-full items-center">SAR Satellite observation simulator</div>
             <div v-show="menu" class="fixed top-0 left-0 z-30 flex h-screen w-screen">
               <div class="bg-warmgray-100 flex w-64 flex-col bg-white shadow">
                 <MenuList @close-menu="toggleMenu()" />
@@ -21,7 +21,6 @@
         </div>
       </div>
     </div>
-    <Languages class="mt-4" />
   </div>
 </template>
 
@@ -34,7 +33,6 @@ import { User } from "firebase/auth";
 import { useI18nParam } from "@/i18n/utils";
 import { useStore } from "@/store/index";
 
-import Languages from "@/components/Languages.vue";
 import MenuList from "@/components/MenuList.vue";
 interface UserData {
   user: User | null;
@@ -43,7 +41,6 @@ interface UserData {
 export default defineComponent({
   name: "AppLayout",
   components: {
-    Languages,
     MenuList,
   },
   setup() {

@@ -1,9 +1,9 @@
 <template>
   <div>
-    <h1>SAR Satellite Simulation</h1>
+    <h1>Satellite & AOI setting</h1>
     <form @submit.prevent="startSimulation">
       <section>
-        <h2>Satellites</h2>
+        <h2 class="text-3xl font-bold text-gray-900">Satellites</h2>
         <div v-for="(sat, index) in satellites" :key="index" style="margin-bottom: 1rem; padding: 0.5rem; border: 1px solid #ccc">
           <label>
             Orbit Type:
@@ -45,11 +45,17 @@
             </label>
           </div>
         </div>
-        <button type="button" @click="addSatellite">Add Satellite</button>
+        <button
+          type="button"
+          class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition duration-300 text-lg"
+          @click="addSatellite"
+        >
+          Add Satellite
+        </button>
       </section>
 
       <section style="margin-top: 1rem">
-        <h2>AOI</h2>
+        <h2 class="text-3xl font-bold text-gray-900">AOI</h2>
         <div v-for="(aoi, index) in aois" :key="index" style="margin-bottom: 0.5rem">
           <label>
             AOI Latitude:
@@ -60,16 +66,31 @@
             <input type="number" step="any" v-model.lazy.number="aoi.lon" />
           </label>
         </div>
-        <button type="button" @click="addAOI">Add AOI</button>
+        <button
+          type="button"
+          class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition duration-300 text-lg"
+          @click="addAOI"
+        >
+          Add AOI
+        </button>
       </section>
 
       <div style="margin-top: 1rem">
-        <button type="submit">Start Simulation</button>
+        <button
+          type="submit"
+          class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-700 hover:to-purple-800 text-white font-bold py-4 px-8 rounded-2xl shadow-lg transform hover:scale-105 transition duration-300"
+        >
+          🚀 Start Simulation
+        </button>
       </div>
     </form>
+    <div v-if="simulationStarted" style="margin-top: 2rem">
+      <!-- マップコンポーネントへ、計算済みの各衛星軌道データと AOI 情報を渡す -->
+      <MapComponent :access-token="accessToken" :satellites="computedSatellites" :aois="aois" />
+    </div>
     <!-- 撮像待ち時間の結果表示 -->
     <div v-if="imagingWaitResults.length > 0" class="results">
-      <h2>Imaging Wait Times</h2>
+      <h2 class="text-3xl font-bold text-gray-900">Imaging Wait Times</h2>
       <table>
         <thead>
           <tr>
@@ -91,10 +112,6 @@
         </tbody>
       </table>
     </div>
-    <div v-if="simulationStarted" style="margin-top: 2rem">
-      <!-- マップコンポーネントへ、計算済みの各衛星軌道データと AOI 情報を渡す -->
-      <MapComponent :access-token="accessToken" :satellites="computedSatellites" :aois="aois" />
-    </div>
   </div>
 </template>
 
@@ -105,9 +122,9 @@ import * as satellite from "satellite.js";
 
 const R_EARTH = 6378.137; // 地球半径 [km]
 const MU = 398600.4418; // 地球の重力定数 [km^3/s^2]
-const TIME_SCALE = 10; // シミュレーション時刻と実時間の比 1 step = 10 sec これをある程度の小さく解像度が足りず近距離が判定できない
-const SIM_DAYS = 10;
-const SIM_DURATION = (60 * 60 * 24 * SIM_DAYS) / TIME_SCALE;
+export const TIME_SCALE = 10; // シミュレーション時刻と実時間の比 1 step = 10 sec これをある程度の小さく解像度が足りず近距離が判定できない
+export const SIM_DAYS = 10;
+export const SIM_DURATION = (60 * 60 * 24 * SIM_DAYS) / TIME_SCALE;
 
 export const ORBIT_TYPES = {
   SUN_SYNCHRONOUS: "sun-synchronous",

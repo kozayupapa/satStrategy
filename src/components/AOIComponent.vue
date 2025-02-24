@@ -27,8 +27,8 @@ export default defineComponent({
       const el = document.createElement("div");
       el.className = "aoi-marker";
       // ここでスタイルを直接設定してもOK
-      el.style.width = "30px";
-      el.style.height = "30px";
+      el.style.width = "15px";
+      el.style.height = "15px";
       el.style.backgroundColor = "blue";
       el.style.border = "3px solid white";
       el.style.borderRadius = "50%";

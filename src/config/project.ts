@@ -1,10 +1,9 @@
 export const firebaseConfig = {
-  apiKey: "AIzaSyAd-pX35BsCvIBDXstf_LmQaz82PNFGcMI",
-  authDomain: "fir-vue-startup-kit.firebaseapp.com",
-  databaseURL: "https://fir-vue-startup-kit.firebaseio.com",
-  projectId: "fir-vue-startup-kit",
-  storageBucket: "fir-vue-startup-kit.appspot.com",
-  messagingSenderId: "225404938985",
-  appId: "1:225404938985:web:a2cea9fab1722fce",
-  messageKey: "BGwIKr3yZdXmg4Pl-BpIQX_ETtHYl0RqvAJFoc-hYKFyaoU3wZXarqto5DSq1cemFuARMjFvJ02B83T5ga42MKo",
+  apiKey: "AIzaSyAB4hpr__m1sLiNPIzLtNxI_dHn_ftSP-A",
+  authDomain: "satbusinessgame.firebaseapp.com",
+  projectId: "satbusinessgame",
+  storageBucket: "satbusinessgame.firebasestorage.app",
+  messagingSenderId: "153830422214",
+  appId: "1:153830422214:web:a8335053f6d5bc5ffb89c7",
+  measurementId: "G-L24SV9C9P6",
 };

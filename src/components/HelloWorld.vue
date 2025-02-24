@@ -3,7 +3,7 @@
     <h1 class="my-6 text-4xl font-bold">
       {{ $t("message.hello") }}
     </h1>
-    
+
     <p>
       For a guide and recipes on how to configure / customize this project,<br />
       check out the

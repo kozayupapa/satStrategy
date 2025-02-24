@@ -8,7 +8,7 @@ import router from "./router";
 
 import i18nConf from "./i18n/index";
 import { i18nUtils } from "./i18n/utils";
-import "mapbox-gl/dist/mapbox-gl.css";  
+import "mapbox-gl/dist/mapbox-gl.css";
 
 const i18n = createI18n(i18nConf);
 const app = createApp(App);

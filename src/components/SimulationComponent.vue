@@ -36,7 +36,7 @@
           <div>
             <label>
               Altitude (km):
-              <input type="number" v-model.lazy.number="sat.altitude" />
+              <input type="number" step="any" v-model.lazy.number="sat.altitude" />
             </label>
             <label>
               meanMotion (revs per day):
@@ -80,6 +80,18 @@
           class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-700 hover:to-purple-800 text-white font-bold py-4 px-8 rounded-2xl shadow-lg transform hover:scale-105 transition duration-300"
         >
           🚀 Start Simulation
+        </button>
+        <button
+          type="button"
+          class="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-2xl shadow-lg transform hover:scale-105 transition duration-300"
+          @click="optimizeSatellites"
+          :disabled="optimizing"
+        >
+          <svg v-if="optimizing" class="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-linecap="round" fill="none" stroke-opacity="0.25" />
+            <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" stroke-width="4" stroke-linecap="round" fill="none" />
+          </svg>
+          {{ optimizing ? "🔍 Optimizing..." : "🔍 Optimize Satellites" }}
         </button>
       </div>
     </form>
@@ -139,6 +151,7 @@
 import { defineComponent, ref, computed } from "vue";
 import MapComponent from "./MapComponent.vue";
 import * as satellite from "satellite.js";
+import { RandomForestRegression } from "ml-random-forest";
 
 const R_EARTH = 6378.137; // 地球半径 [km]
 const MU = 398600.4418; // 地球の重力定数 [km^3/s^2]
@@ -513,7 +526,179 @@ export default defineComponent({
     const startSimulation = () => {
       simulationStarted.value = true;
     };
+    const optimizing = ref(false);
+    // 衛星の軌道データを生成する（computedSatellites と同様の処理）
+    const computeSatellitesForCandidate = (candidate: SatelliteInput[]): SatelliteOrbit[] => {
+      return candidate.map((satInput) => {
+        const { line1, line2 } = generateDummyTLE(satInput);
+        const satrec = satellite.twoline2satrec(line1, line2);
+        const orbitData: Array<{ lat: number; lng: number }> = [];
+        const startTime = new Date();
+        for (let t_sim = 0; t_sim <= SIM_DURATION; t_sim++) {
+          const t_offset_sec = t_sim * TIME_SCALE;
+          const currentTime = new Date(startTime.getTime() + t_offset_sec * 1000);
+          const posVel = satellite.propagate(satrec, currentTime);
+          if (posVel.position && typeof posVel.position !== "boolean") {
+            const gmst = satellite.gstime(currentTime);
+            const geodetic = satellite.eciToGeodetic(posVel.position, gmst);
+            const lat = satellite.degreesLat(geodetic.latitude);
+            const lon = satellite.degreesLong(geodetic.longitude);
+            orbitData.push({ lat, lng: lon });
+          }
+        }
+        return { orbitData };
+      });
+    };
 
+    // -----------------------
+    // ② 新たな heuristicCost 関数
+    // 各候補に対して、シミュレーションで得られた各 AOI の maxWait の合計をコストとする
+    // -----------------------
+    const heuristicCost = (candidate: SatelliteInput[]): number => {
+      // 候補パラメータに基づく衛星軌道データをシミュレーション
+      const satOrbits = computeSatellitesForCandidate(candidate);
+
+      // AOI ごとに各衛星からの撮像時刻を集約する
+      const aggregated: Record<number, number[]> = {};
+      satOrbits.forEach((satOrbit, satIndex) => {
+        aois.value.forEach((aoi, aoiIndex) => {
+          const imagingTimes: number[] = [];
+          for (let i = 0; i < satOrbit.orbitData.length - 1; i++) {
+            const currentPos = satOrbit.orbitData[i];
+            const nextPos = satOrbit.orbitData[i + 1];
+            const heading = computeBearing(currentPos.lat, currentPos.lng, nextPos.lat, nextPos.lng);
+            const lateral1 = (heading + 90) % 360;
+            const lateral2 = (heading + 270) % 360;
+            const bearingToAOI = computeBearing(currentPos.lat, currentPos.lng, aoi.lat, aoi.lon);
+            const diff1 = angleDifference(bearingToAOI, lateral1);
+            const diff2 = angleDifference(bearingToAOI, lateral2);
+            if (diff1 <= lateralTolerance || diff2 <= lateralTolerance) {
+              // Off-Nadir 角の計算
+              const distance = haversineDistance(currentPos.lat, currentPos.lng, aoi.lat, aoi.lon);
+              // offNadir = arctan(distance / altitude)
+              const offNadirDeg = toDegrees(Math.atan(distance / candidate[satIndex].altitude));
+              const last = imagingTimes.length ? imagingTimes[imagingTimes.length - 1] : null;
+              const current = Math.round((i * TIME_SCALE) / 2 / 36) / 100;
+              if (offNadirDeg >= offNadirMin && offNadirDeg <= offNadirMax && (last ? current - last > 0.2 : true)) {
+                imagingTimes.push(current);
+              }
+            }
+          }
+          // AOI ごとに撮像時刻を集約
+          if (!aggregated[aoiIndex]) {
+            aggregated[aoiIndex] = [];
+          }
+          aggregated[aoiIndex].push(...imagingTimes);
+        });
+      });
+
+      // 各 AOI について、撮像時刻からインターバルを計算し、maxWait を算出
+      let totalCost = 0;
+      Object.keys(aggregated).forEach((aoiIndexStr) => {
+        const times = aggregated[parseInt(aoiIndexStr, 10)];
+        if (times.length >= 2) {
+          times.sort((a, b) => a - b);
+          const intervals: number[] = [];
+          intervals.push(times[0]); // 初回撮像時刻を初期待ち時間とする
+          for (let j = 0; j < times.length - 1; j++) {
+            intervals.push(times[j + 1] - times[j]);
+          }
+          const maxWait = Math.round(Math.max(...intervals) * 100) / 100;
+          totalCost += maxWait;
+        } else {
+          // 撮像時刻が不足している場合は高いペナルティを課す
+          totalCost += 100;
+        }
+      });
+
+      return totalCost;
+    };
+
+    // -----------------------
+    // ③ 候補の特徴量をフラット化する関数
+    // 各衛星について、launchLat, launchLon, altitude, launchAngle の4要素を順に並べる
+    // -----------------------
+    const flattenCandidate = (candidate: SatelliteInput[]): number[] => {
+      return candidate.flatMap((sat) => [sat.launchLat, sat.launchLon, sat.altitude, sat.launchAngle]);
+    };
+
+    // -----------------------
+    // ④ 最適化処理内で、RandomForest を利用してサロゲート最適化する例
+    // -----------------------
+    const optimizeSatellites = async () => {
+      optimizing.value = true;
+      // 疑似的な待機（実際の処理時間に応じて調整）
+      await new Promise((resolve) => {
+        setTimeout(resolve, 100);
+      });
+
+      // (1) 学習用データ生成：候補パラメータ群を多数生成して、各候補の実際コストを計算
+      const numSamples = 50;
+      const trainingSet: number[][] = [];
+      const trainingLabels: number[] = [];
+      for (let i = 0; i < numSamples; i++) {
+        const candidate = satellitesRef.value.map((sat) => {
+          const newSat = { ...sat };
+          newSat.launchLat = sat.launchLat + (Math.random() - 0.5) * 45;
+          newSat.launchLon = sat.launchLon + (Math.random() - 0.5) * 180;
+          newSat.altitude = sat.altitude + (Math.random() - 0.5) * 200;
+          if (sat.orbitType === ORBIT_TYPES.INCLINED) {
+            newSat.launchAngle = sat.launchAngle + (Math.random() - 0.5) * 20;
+          } else {
+            newSat.launchAngle = calculateSunSyncInclination(newSat.altitude);
+          }
+          return newSat;
+        });
+        const features = flattenCandidate(candidate);
+        const cost = heuristicCost(candidate);
+        trainingSet.push(features);
+        trainingLabels.push(cost);
+      }
+
+      // (2) RandomForestRegression の学習（npm install ml-random-forest でインストール済み）
+      const rfOptions = {
+        seed: 3,
+        maxFeatures: 0.8,
+        replacement: true,
+        nEstimators: 25,
+      };
+      const rf = new RandomForestRegression(rfOptions);
+      rf.train(trainingSet, trainingLabels);
+
+      // (3) サロゲートモデルを用いて新たな候補を生成し、予測コストが最小となる候補を選択
+      const numPredictionCandidates = 150;
+      let bestPredictedCost = Infinity;
+      let bestCandidate: SatelliteInput[] = satellitesRef.value.map((sat) => ({ ...sat }));
+      for (let i = 0; i < numPredictionCandidates; i++) {
+        const candidate = satellitesRef.value.map((sat) => {
+          const newSat = { ...sat };
+          newSat.launchLat = sat.launchLat + (Math.random() - 0.5) * 45;
+          newSat.launchLon = sat.launchLon + (Math.random() - 0.5) * 180;
+          newSat.altitude = sat.altitude + (Math.random() - 0.5) * 200;
+          if (sat.orbitType === ORBIT_TYPES.INCLINED) {
+            newSat.launchAngle = sat.launchAngle + (Math.random() - 0.5) * 30;
+          } else {
+            newSat.launchAngle = calculateSunSyncInclination(newSat.altitude);
+          }
+          return newSat;
+        });
+        const features = flattenCandidate(candidate);
+        const [predictedCost] = rf.predict([features]); // 配列の最初の要素を取得
+        if (predictedCost < bestPredictedCost) {
+          bestPredictedCost = predictedCost;
+          bestCandidate = candidate.map((sat) => ({ ...sat }));
+        }
+      }
+
+      // (4) 最適候補を実際のヒューリスティック評価で確認
+      const trueCost = heuristicCost(bestCandidate);
+      console.log("Best candidate true cost:", trueCost);
+
+      // (5) 最適候補を反映
+      satellitesRef.value = bestCandidate;
+
+      optimizing.value = false;
+    };
     return {
       accessToken,
       addSatellite,
@@ -525,6 +710,8 @@ export default defineComponent({
       computedSatellites,
       imagingWaitResults,
       aggregatedImagingWaitResults,
+      optimizing,
+      optimizeSatellites,
     };
   },
 });

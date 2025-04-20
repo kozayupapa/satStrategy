@@ -633,6 +633,7 @@ export default defineComponent({
       });
 
       // (1) 学習用データ生成：候補パラメータ群を多数生成して、各候補の実際コストを計算
+      /*
       const numSamples = 50;
       const trainingSet: number[][] = [];
       const trainingLabels: number[] = [];
@@ -664,9 +665,10 @@ export default defineComponent({
       };
       const rf = new RandomForestRegression(rfOptions);
       rf.train(trainingSet, trainingLabels);
+      */
 
       // (3) サロゲートモデルを用いて新たな候補を生成し、予測コストが最小となる候補を選択
-      const numPredictionCandidates = 150;
+      const numPredictionCandidates = 100;
       let bestPredictedCost = Infinity;
       let bestCandidate: SatelliteInput[] = satellitesRef.value.map((sat) => ({ ...sat }));
       for (let i = 0; i < numPredictionCandidates; i++) {
@@ -682,8 +684,12 @@ export default defineComponent({
           }
           return newSat;
         });
+        /*
         const features = flattenCandidate(candidate);
         const [predictedCost] = rf.predict([features]); // 配列の最初の要素を取得
+        */
+        const predictedCost = heuristicCost(candidate);
+
         if (predictedCost < bestPredictedCost) {
           bestPredictedCost = predictedCost;
           bestCandidate = candidate.map((sat) => ({ ...sat }));

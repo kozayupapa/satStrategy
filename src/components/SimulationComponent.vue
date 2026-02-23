@@ -190,7 +190,7 @@ export default defineComponent({
   name: "SimulationComponent",
   components: { MapComponent },
   setup() {
-    const accessToken = ref("MAPBOX_TOKEN_REMOVED");
+    const accessToken = ref(import.meta.env.VITE_MAPBOX_ACCESS_TOKEN);
 
     // 初期状態として 1 つの衛星、1 つの AOI を用意
     const satellitesRef = ref<SatelliteInput[]>([
